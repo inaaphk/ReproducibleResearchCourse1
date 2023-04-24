@@ -5,21 +5,150 @@ output:
     keep_md: true
 ---
 
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, fig.width = 10, fig.height = 5, fig.keep = 'all' ,fig.path = 'figures\ ', dev = 'png')
 
 ## Loading and preprocessing the data
 
+# Loading packages
+library(ggplot2)
+library(ggthemes)
 
+# Reading downloaded file
+activity <- read.csv("activity.csv")
 
-## What is mean total number of steps taken per day?
+# Setting date format to help get the weekdays of the dates
+activity$date <- as.POSIXct(activity$date, "%Y%m%d")
 
+# Getting the days of all the dates on the dataset
+day <- weekdays(activity$date)
 
+# Combining the dataset with the weekday of the dates
+activity <- cbind(activity, day)
 
-## What is the average daily activity pattern?
+# Viewing the processed data
+summary(activity)
 
+-------------------------------------------------------------------------------
 
+## Q1: What is mean total number of steps taken per day?
 
-## Imputing missing values
+# Calculating total steps taken on a day
+activityTotalSteps <- with(activity, aggregate(steps, by = list(date), sum, na.rm = TRUE))
 
+# Changing col names
+names(activityTotalSteps) <- c("Date", "Steps")
 
+# Converting the data set into a data frame to be able to use ggplot2
+totalStepsdf <- data.frame(activityTotalSteps)
 
-## Are there differences in activity patterns between weekdays and weekends?
+# Plotting a histogram using ggplot2
+g <- ggplot(totalStepsdf, aes(x = Steps)) + 
+  geom_histogram(breaks = seq(0, 25000, by = 2500), fill = "#83CAFF", col = "black") + 
+  ylim(0, 30) + 
+  xlab("Total Steps Taken Per Day") + 
+  ylab("Frequency") + 
+  ggtitle("Total Number of Steps Taken on a Day") + 
+  theme_calc(base_family = "serif")
+
+print(g)
+
+# Mean of the total number of steps/day
+mean(activityTotalSteps$Steps)
+
+# Median of the total number of steps/day
+median(activityTotalSteps$Steps)
+
+-------------------------------------------------------------------------------
+
+## Q2: What is the average daily activity pattern?
+
+# Calculating the average number of steps taken, averaged across all days by 5-min intervals.
+averageDailyActivity <- aggregate(activity$steps, by = list(activity$interval), 
+                                  FUN = mean, na.rm = TRUE)
+# Changing column names
+names(averageDailyActivity) <- c("Interval", "Mean")
+
+# Converting data set into a dataframe
+averageActivitydf <- data.frame(averageDailyActivity)
+
+# Plotting on ggplot2
+da <- ggplot(averageActivitydf, mapping = aes(Interval, Mean)) + 
+  geom_line(col = "blue") +
+  xlab("Interval") + 
+  ylab("Average Number of Steps") + 
+  ggtitle("Average Number of Steps Per Interval") +
+  theme_calc(base_family = "serif")
+  
+print(da)
+
+# Which 5-minute interval, on average across all the days in the dataset, contains the maximum number of steps?
+averageDailyActivity[which.max(averageDailyActivity$Mean), ]$Interval
+
+-------------------------------------------------------------------------------
+
+## Q3: Inputing missing values
+
+# Number of rows with NAs values
+sum(is.na(activity$steps))
+
+# Matching the mean of daily activity with the missing values
+inputedSteps <- averageDailyActivity$Mean[match(activity$interval, averageDailyActivity$Interval)]
+
+# Transforming steps in activity if they were missing values with the filled values from above.
+activityInputed <- transform(activity, steps = ifelse(is.na(activity$steps), yes = inputedSteps, no = activity$steps))
+
+# Forming the new dataset with the inputed missing values.
+totalActivityInputed <- aggregate(steps ~ date, activityInputed, sum)
+
+# Changing col names
+names(totalActivityInputed) <- c("date", "dailySteps")
+
+# Test if new dataset has no NA values
+sum(is.na(totalActivityInputed$dailySteps))
+
+# Converting the data set into a data frame to be able to use ggplot2
+totalInputedStepsdf <- data.frame(totalActivityInputed)
+
+# Plotting a histogram using ggplot2
+p <- ggplot(totalInputedStepsdf, aes(x = dailySteps)) + 
+  geom_histogram(breaks = seq(0, 25000, by = 2500), fill = "#83CAFF", col = "black") + 
+  ylim(0, 30) + 
+  xlab("Total Steps Taken Per Day") + 
+  ylab("Frequency") + 
+  ggtitle("Total Number of Steps Taken on a Day") + 
+  theme_calc(base_family = "serif")
+
+print(p)
+
+# Mean of the total number of steps taken per day
+mean(totalActivityInputed$dailySteps)
+
+# Median of the total number of steps taken per day
+median(totalActivityInputed$dailySteps)
+
+## Q4: Are there differences in activity patterns between weekdays and weekends?
+
+# Updating format of the dates
+activity$date <- as.Date(strptime(activity$date, format="%Y-%m-%d"))
+
+# Creating a function that distinguishes weekdays from weekends
+activity$dayType <- sapply(activity$date, function(x) {
+  if(weekdays(x) == "Saturday" | weekdays(x) == "Sunday")
+  {y <- "Weekend"}
+  else {y <- "Weekday"}
+  y
+})
+
+# Creating the data set that will be plotted
+activityByDay <-  aggregate(steps ~ interval + dayType, activity, mean, na.rm = TRUE)
+
+# Plotting using ggplot2
+dayPlot <-  ggplot(activityByDay, aes(x = interval , y = steps, color = dayType)) + 
+  geom_line() + ggtitle("Average Daily Steps by Day Type") + 
+  xlab("Interval") + 
+  ylab("Average Number of Steps") +
+  facet_wrap(~dayType, ncol = 1, nrow=2) +
+  scale_color_discrete(name = "Day Type") +
+  theme_calc(base_family = "serif")
+
+print(dayPlot) 
